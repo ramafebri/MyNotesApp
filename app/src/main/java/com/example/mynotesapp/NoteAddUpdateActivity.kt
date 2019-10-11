@@ -2,6 +2,7 @@ package com.example.mynotesapp
 
 import android.content.ContentValues
 import android.content.Intent
+import android.net.Uri
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.Menu
@@ -10,9 +11,10 @@ import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import com.example.mynotesapp.db.DatabaseContract
+import com.example.mynotesapp.db.DatabaseContract.NoteColumns.Companion.CONTENT_URI
 import com.example.mynotesapp.db.DatabaseContract.NoteColumns.Companion.DATE
-import com.example.mynotesapp.db.NoteHelper
 import com.example.mynotesapp.entity.Note
+import com.example.mynotesapp.helper.MappingHelper
 import kotlinx.android.synthetic.main.activity_note_add_update.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -41,34 +43,22 @@ class NoteAddUpdateActivity : AppCompatActivity(), View.OnClickListener {
             values.put(DatabaseContract.NoteColumns.DESCRIPTION, description)
 
             if (isEdit){
-                val result =  noteHelper.update(note?.id.toString(), values).toLong()
-                if (result>0){
-                    setResult(RESULT_UPDATE, intent)
-                    finish()
-                }else{
-                    Toast.makeText(this@NoteAddUpdateActivity, "Gagal mengupdate data", Toast.LENGTH_SHORT).show()
-                }
+                contentResolver.update(uriWithId, values, null, null)
+                Toast.makeText(this, "Satu item berhasil disimpan", Toast.LENGTH_LONG).show()
+                finish()
             }else{
-                note?.date = getCurrentDate()
                 values.put(DATE, getCurrentDate())
-                val result = noteHelper.insert(values)
-
-                if (result > 0) {
-                    note?.id = result.toInt()
-                    setResult(RESULT_ADD, intent)
-                    finish()
-                } else {
-                    Toast.makeText(this@NoteAddUpdateActivity, "Gagal menambah data", Toast.LENGTH_SHORT).show()
-                }
+                contentResolver.insert(CONTENT_URI, values)
+                Toast.makeText(this, "Satu item berhasil disimpan", Toast.LENGTH_SHORT).show()
+                finish()
             }
-
         }
     }
 
     private var isEdit = false
     private var note: Note? = null
     private var position: Int =0
-    private lateinit var noteHelper: NoteHelper
+    private lateinit var uriWithId: Uri
 
     companion object {
         const val EXTRA_NOTE = "extra_note"
@@ -86,7 +76,6 @@ class NoteAddUpdateActivity : AppCompatActivity(), View.OnClickListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_note_add_update)
 
-        noteHelper = NoteHelper.getInstance(applicationContext)
         note = intent.getParcelableExtra(EXTRA_NOTE)
         if (note!= null){
             position = intent.getIntExtra(EXTRA_POSITION, 0)
@@ -98,9 +87,17 @@ class NoteAddUpdateActivity : AppCompatActivity(), View.OnClickListener {
         val actionBarTitle: String
         val btnTitle: String
 
-        if (isEdit){
+        if (isEdit) {
+            uriWithId = Uri.parse(CONTENT_URI.toString()+ "/" + note?.id)
+
+            val cursor = contentResolver.query(uriWithId, null, null, null, null)
+            if (cursor != null){
+                note = MappingHelper.mapCursorToObject(cursor)
+                cursor.close()
+            }
             actionBarTitle = "Ubah"
             btnTitle = "Update"
+
             note?.let { edt_title.setText(it.title) }
             note?.let { edt_description.setText(it.description) }
         }else{
@@ -161,15 +158,9 @@ class NoteAddUpdateActivity : AppCompatActivity(), View.OnClickListener {
                 if (isDialogClose) {
                     finish()
                 } else {
-                    val result = noteHelper.deleteById(note?.id.toString()).toLong()
-                    if (result > 0) {
-                        val intent = Intent()
-                        intent.putExtra(EXTRA_POSITION, position)
-                        setResult(RESULT_DELETE, intent)
-                        finish()
-                    } else {
-                        Toast.makeText(this@NoteAddUpdateActivity, "Gagal menghapus data", Toast.LENGTH_SHORT).show()
-                    }
+                    contentResolver.delete(uriWithId, null, null)
+                    Toast.makeText(this, "Satu item berhasil dihapus", Toast.LENGTH_SHORT).show()
+                    finish()
                 }
             }
             .setNegativeButton("Tidak") { dialog, id -> dialog.cancel() }
